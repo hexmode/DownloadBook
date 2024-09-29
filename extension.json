@@ -8,45 +8,47 @@
 	"SpecialPages": {
 		"DownloadBook": "MediaWiki\\DownloadBook\\SpecialDownloadBook"
 	},
-	"AutoloadClasses": {
-		"MediaWiki\\DownloadBook\\BookRenderingTask": "includes/BookRenderingTask.php",
-		"MediaWiki\\DownloadBook\\DownloadBookUpdater": "includes/DownloadBookUpdater.php",
-		"MediaWiki\\DownloadBook\\Hooks": "includes/Hooks.php",
-		"MediaWiki\\DownloadBook\\SpecialDownloadBook": "includes/SpecialDownloadBook.php"
+	"AutoloadNamespaces": {
+		"MediaWiki\\DownloadBook\\": "includes/"
+	},
+	"HookHandlers": {
+		"main": {
+			"class": "MediaWiki\\DownloadBook\\Hooks"
+		}
 	},
 	"Hooks": {
-		"LoadExtensionSchemaUpdates": "MediaWiki\\DownloadBook\\DownloadBookUpdater::onLoadExtensionSchemaUpdates",
-		"UserGetReservedNames": "MediaWiki\\DownloadBook\\Hooks::onUserGetReservedNames"
+		"LoadExtensionSchemaUpdates": "main",
+		"UserGetReservedNames": "main"
 	},
 	"config": {
 		"DownloadBookConvertCommand": {
-                        "value": {
+            "value": {
 				"rl": "weasyprint --encoding utf8 {INPUT} {OUTPUT}",
 				"epub": "pandoc --from=html --to=epub {INPUT} -o {OUTPUT} --metadata title={METADATA:title} --metadata creator={METADATA:creator}",
 				"odf": "pandoc --from=html --to=odt {INPUT} -o {OUTPUT}"
 			},
 			"description": "Shell commands that convert HTML into other formats, e.g. PDF or ePub. Keys are formats from Extension:Collection (e.g. \"rl\" for PDF)."
-                },
-                "DownloadBookFileExtension": {
-			 "value": {
+        },
+        "DownloadBookFileExtension": {
+			"value": {
 				"rl": "pdf",
 				"epub": "epub",
 				"odf": "odt"
 			},
 			"description": "Maps of formats from Extension:Collection (e.g. \"rl\") to filename extensions (e.g. \"pdf\")"
-                },
+        },
 		"DownloadBookMetadataFromRegex": {
-                        "value": {
+            "value": {
 				"creator": "/Author\\s*=\\s*([^\n]+)/"
 			},
 			"description": "Allows to guess metadata by pattern-matching against the text of the article. Matched value should be surrounded in braces: ( and )."
-                },
+        },
 		"DownloadBookDefaultMetadata": {
-                        "value": {
+            "value": {
 				"creator": "Default creator"
 			},
 			"description": "Values to put into metadata if respective keys weren't found in any other way. E.g. [ 'creator' => 'Name of site' ]."
-                }
+        }
 	},
 	"manifest_version": 2
 }

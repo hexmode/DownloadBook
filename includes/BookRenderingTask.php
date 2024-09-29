@@ -22,22 +22,21 @@
 
 namespace MediaWiki\DownloadBook;
 
-use DeferredUpdates;
 use FileBackend;
 use FormatJson;
-use Html;
+use MediaWiki\Context\RequestContext;
+use MediaWiki\Deferred\DeferredUpdates;
+use MediaWiki\FileBackend\FSFile\TempFSFileFactory;
+use MediaWiki\Html\Html;
 use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\Shell\Shell;
 use MediaWiki\MediaWikiServices;
-use MWException;
-use RequestContext;
-use SpecialPage;
+use MediaWiki\SpecialPage\SpecialPage;
+use MediaWiki\Title\Title;
+use MediaWiki\User\User;
 use TempFSFile;
 use TextContent;
-use Title;
 use UploadStashException;
-use User;
-use WikiPage;
 
 class BookRenderingTask {
 	const STATE_FAILED = 'failed';
@@ -212,7 +211,7 @@ class BookRenderingTask {
 		if ( !$stashKey ) {
 			$this->logger->error( '[BookRenderingTask] stream(#' . $this->id . '): ' .
 				'stashKey not found in the database.' );
-			throw new MWException( 'Rendered file is not available.' );
+			throw new BookRenderingException( 'Rendered file is not available.' );
 		}
 
 		$file = $this->getUploadStash()->getFile( $stashKey );
@@ -234,6 +233,7 @@ class BookRenderingTask {
 
 		$this->logger->debug( "[BookRenderingTask] Going to render #" . $this->id .
 			", newFormat=[$newFormat]." );
+		$this->logger->debug( "[BookRenderingTask metabook] " . var_export( $metabook, true ) );
 
 		$bookTitle = $metabook['title'] ?? '';
 		$bookSubtitle = $metabook['subtitle'] ?? '';
@@ -262,13 +262,17 @@ class BookRenderingTask {
 
 		foreach ( $items as $item ) {
 			$type = $item['type'] ?? '';
+			$rev = null;
+			$title = null;
+			$this->logger->debug( "[BookRenderingTask loop item] " . var_export( $item, true ) );
 			if ( $type != 'article' ) {
-				// type="chapter" is not yet supported.
-				continue;
+				$this->logger->debug( "[BookRenderingTask] Rendering article ..." );
+				$rev = $item['revision'] ?? null;
 			}
 
-			$title = Title::newFromText( $item['title'] ?? '' );
+			$title ??= Title::newFromText( $item['title'] ?? '' );
 			if ( !$title ) {
+				$this->logger->debug( "[BookRenderingTask] invalid title ..." );
 				// Ignore invalid titles
 				continue;
 			}
@@ -277,11 +281,13 @@ class BookRenderingTask {
 			$page = MediaWikiServices::getInstance()->getWikiPageFactory()->newFromTitle( $title );
 			$content = $page->getContent();
 			if ( !$content ) {
+				$this->logger->debug( "[BookRenderingTask] couldn't get content for $title ..." );
 				// Ignore nonexistent pages, etc.
 				continue;
 			}
 
 			if ( !( $content instanceof TextContent ) ) {
+				$this->logger->debug( "[BookRenderingTask] not text: " . get_class( $content ) );
 				// Ignore non-text pages.
 				continue;
 			}
@@ -290,6 +296,8 @@ class BookRenderingTask {
 				// Either we are exporting 1 article (instead of the entire Book)
 				// or the "Title" field wasn't specified on Special:Book.
 				// In this case consider the title of the first article to be the title of entire book.
+				$this->logger->debug( "[BookRenderingTask] This isn't a book: " . var_export( $metadata, true ) );
+
 				$metadata['title'] = $title->getFullText();
 			}
 
@@ -392,11 +400,12 @@ class BookRenderingTask {
 
 		$fileExtension = $wgDownloadBookFileExtension[$newFormat] ?? $newFormat;
 
-		$inputFile = TempFSFile::factory( 'toconvert', 'html' );
+		$tmpFactory = new TempFSFileFactory();
+		$inputFile = $tmpFactory->newTempFSFile( 'toconvert', 'html' );
 		$inputPath = $inputFile->getPath();
 		file_put_contents( $inputPath, $html );
 
-		$outputFile = TempFSFile::factory( 'converted', $fileExtension );
+		$outputFile = $tmpFactory->newTempFSFile( 'converted', $fileExtension );
 		$outputPath = $outputFile->getPath();
 
 		$command = str_replace(
