@@ -11,6 +11,9 @@
 	"AutoloadNamespaces": {
 		"MediaWiki\\DownloadBook\\": "includes/"
 	},
+	"ExtensionMessagesFiles": {
+		"DownloadBookAlias": "includes/alias.php"
+	},
 	"HookHandlers": {
 		"main": {
 			"class": "MediaWiki\\DownloadBook\\Hooks"

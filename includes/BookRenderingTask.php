@@ -224,12 +224,92 @@ class BookRenderingTask {
 		$repo->streamFileWithStatus( $file->getPath(), $headers );
 	}
 
+	protected function renderItem( array &$metadata, array $item, $depth ): string {
+		$type = $item['type'] ?? '';
+		$title = null;
+		$this->logger->debug( "[BookRenderingTask loop item] " . var_export( $item, true ) );
+		if ( $type === 'chapter' ) {
+			$title = $item['title'];
+			$this->logger->debug( "[BookRenderingTask] Rendering Chapter '$title' ..." );
+			return $this->getContent( $metadata, $item['items'] ?? [], $depth + 1 );
+		}
+
+		$title ??= Title::newFromText( $item['title'] ?? '' );
+		if ( !$title ) {
+			$this->logger->debug( "[BookRenderingTask] invalid title ..." );
+			// Ignore invalid titles
+			return '';
+		}
+
+		// Add parsed HTML of this article
+		$page = MediaWikiServices::getInstance()->getWikiPageFactory()->newFromTitle( $title );
+		$content = $page->getContent();
+		if ( !$content ) {
+			$this->logger->debug( "[BookRenderingTask] couldn't get content for $title ..." );
+			// Ignore nonexistent pages, etc.
+			return '';
+		}
+
+		if ( !( $content instanceof TextContent ) ) {
+			$this->logger->debug( "[BookRenderingTask] not text: " . get_class( $content ) );
+			// Ignore non-text pages.
+			return '';
+		}
+
+		if ( !isset( $metadata['title'] ) ) {
+			// Either we are exporting 1 article (instead of the entire Book)
+			// or the "Title" field wasn't specified on Special:Book.
+			// In this case consider the title of the first article to be the title of entire book.
+			$this->logger->debug( "[BookRenderingTask] This isn't a book: " . var_export( $metadata, true ) );
+
+			$metadata['title'] = $title->getFullText();
+		}
+
+		if ( !isset( $metadata['creator-user'] ) ) {
+			// Username of user who created the first article in the Book.
+			// FIXME should have another designation somehow.
+			$metadata['creator-user'] = $page->getUserText();
+		}
+
+		global $wgDownloadBookMetadataFromRegex;
+		// Allow to guess some metadata by regex-matching versus the text of this article,
+		// e.g. "/Author=([^\n]+)/" to get the name of author from the infobox.
+		foreach ( $wgDownloadBookMetadataFromRegex as $key => $regex ) {
+			if ( !isset( $metadata[$key] ) ) {
+				$matches = null;
+				if ( preg_match( $regex, $content->getText(), $matches ) ) {
+					$metadata[$key] = $matches[1] ?? '';
+				}
+			}
+		}
+
+		$localParser = MediaWikiServices::getInstance()->getParser();
+		$popts = RequestContext::getMain()->getOutput()->parserOptions();
+		$pout = $localParser->parse(
+			$content->getText(),
+			$title,
+			$popts
+		);
+
+		return Html::element( 'h1', [], $title->getFullText() )
+			. $pout->getText( [ 'enableSectionEditLinks' => false ] )
+			. "\n\n";
+	}
+
+	protected function getContent( array &$metadata, array $items, int $depth = 0 ): string {
+		$html = "";
+		foreach ( $items as $item ) {
+			$html .= $this->renderItem($metadata, $item, $depth);
+		}
+		return $html;
+	}
+
 	/**
 	 * @param array $metabook
 	 * @param string $newFormat
 	 */
 	protected function startRendering( array $metabook, $newFormat ) {
-		global $wgDownloadBookMetadataFromRegex, $wgDownloadBookDefaultMetadata;
+		global $wgDownloadBookDefaultMetadata;
 
 		$this->logger->debug( "[BookRenderingTask] Going to render #" . $this->id .
 			", newFormat=[$newFormat]." );
@@ -260,76 +340,7 @@ class BookRenderingTask {
 			$html .= Html::element( 'h2', [], $bookSubtitle );
 		}
 
-		foreach ( $items as $item ) {
-			$type = $item['type'] ?? '';
-			$rev = null;
-			$title = null;
-			$this->logger->debug( "[BookRenderingTask loop item] " . var_export( $item, true ) );
-			if ( $type != 'article' ) {
-				$this->logger->debug( "[BookRenderingTask] Rendering article ..." );
-				$rev = $item['revision'] ?? null;
-			}
-
-			$title ??= Title::newFromText( $item['title'] ?? '' );
-			if ( !$title ) {
-				$this->logger->debug( "[BookRenderingTask] invalid title ..." );
-				// Ignore invalid titles
-				continue;
-			}
-
-			// Add parsed HTML of this article
-			$page = MediaWikiServices::getInstance()->getWikiPageFactory()->newFromTitle( $title );
-			$content = $page->getContent();
-			if ( !$content ) {
-				$this->logger->debug( "[BookRenderingTask] couldn't get content for $title ..." );
-				// Ignore nonexistent pages, etc.
-				continue;
-			}
-
-			if ( !( $content instanceof TextContent ) ) {
-				$this->logger->debug( "[BookRenderingTask] not text: " . get_class( $content ) );
-				// Ignore non-text pages.
-				continue;
-			}
-
-			if ( !isset( $metadata['title'] ) ) {
-				// Either we are exporting 1 article (instead of the entire Book)
-				// or the "Title" field wasn't specified on Special:Book.
-				// In this case consider the title of the first article to be the title of entire book.
-				$this->logger->debug( "[BookRenderingTask] This isn't a book: " . var_export( $metadata, true ) );
-
-				$metadata['title'] = $title->getFullText();
-			}
-
-			if ( !isset( $metadata['creator-user'] ) ) {
-				// Username of user who created the first article in the Book.
-				$metadata['creator-user'] = $page->getUserText();
-			}
-
-			// Allow to guess some metadata by regex-matching versus the text of this article,
-			// e.g. "/Author=([^\n]+)/" to get the name of author from the infobox.
-			foreach ( $wgDownloadBookMetadataFromRegex as $key => $regex ) {
-				if ( !isset( $metadata[$key] ) ) {
-					$matches = null;
-					if ( preg_match( $regex, $content->getText(), $matches ) ) {
-						$metadata[$key] = $matches[1] ?? '';
-					}
-				}
-			}
-
-			$localParser = MediaWikiServices::getInstance()->getParser();
-			$popts = RequestContext::getMain()->getOutput()->parserOptions();
-			$pout = $localParser->parse(
-				$content->getText(),
-				$title,
-				$popts
-				);
-
-			$html .= Html::element( 'h1', [], $title->getFullText() );
-			$html .= $pout->getText( [ 'enableSectionEditLinks' => false ] );
-			$html .= "\n\n";
-		}
-
+		$html .= $this->getContent( $metadata, $items );
 		$html .= Html::closeElement( 'body' );
 		$html .= Html::closeElement( 'html' );
 
