@@ -26,7 +26,7 @@
 	"config": {
 		"DownloadBookConvertCommand": {
             "value": {
-				"rl": "weasyprint --encoding utf8 {INPUT} {OUTPUT}",
+				"rl": "google-chrome --headless --no-sandbox --disable-gpu --print-to-pdf={OUTPUT} --no-pdf-header-footer --generate-pdf-document-outline {INPUT}",
 				"epub": "pandoc --from=html --to=epub {INPUT} -o {OUTPUT} --metadata title={METADATA:title} --metadata creator={METADATA:creator}",
 				"odf": "pandoc --from=html --to=odt {INPUT} -o {OUTPUT}"
 			},

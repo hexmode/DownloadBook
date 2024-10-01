@@ -24,6 +24,8 @@ namespace MediaWiki\DownloadBook;
 
 use FileBackend;
 use FormatJson;
+use MediaWiki\Context\IContextSource;
+use PSR\Log\LoggerInterface;
 use MediaWiki\Context\RequestContext;
 use MediaWiki\Deferred\DeferredUpdates;
 use MediaWiki\FileBackend\FSFile\TempFSFileFactory;
@@ -49,9 +51,14 @@ class BookRenderingTask {
 	protected $id;
 
 	/**
-	 * @var \Psr\Log\LoggerInterface
+	 * @var LoggerInterface
 	 */
 	protected $logger;
+
+	/**
+	 * @var IContextSource
+	 */
+	protected $context;
 
 	/**
 	 * @param int $id
@@ -59,6 +66,7 @@ class BookRenderingTask {
 	protected function __construct( $id ) {
 		$this->id = $id;
 		$this->logger = LoggerFactory::getInstance( 'DownloadBook' );
+		$this->context = RequestContext::getMain();
 	}
 
 	/**
@@ -305,6 +313,26 @@ class BookRenderingTask {
 	}
 
 	/**
+	 * Get any CSS styles and wrap them in style tags
+	 */
+	protected function getStyles(): string {
+		$CSS = [ 'Common.css', 'Print.css', 'Book.css' ];
+		$links = '';
+		foreach( $CSS as $sheet ) {
+			$title = Title::makeTitle( NS_MEDIAWIKI, $sheet );
+			if ( $title->exists() ) {
+				$links .= Html::element( 'link',
+										 [ 'rel' => "stylesheet",
+										   'type' => "text/css",
+										   'href' => $title->getFullURL( [ 'action' => 'raw', 'ctype' => 'text/css' ] )
+										 ] );
+			}
+		}
+		$this->logger->debug( "[BookRenderingTask] Returning css: $links" );
+		return $links;
+	}
+
+	/**
 	 * @param array $metabook
 	 * @param string $newFormat
 	 */
@@ -315,26 +343,25 @@ class BookRenderingTask {
 			", newFormat=[$newFormat]." );
 		$this->logger->debug( "[BookRenderingTask metabook] " . var_export( $metabook, true ) );
 
-		$bookTitle = $metabook['title'] ?? '';
-		$bookSubtitle = $metabook['subtitle'] ?? '';
-		$items = $metabook['items'] ?? [];
-
 		// This is an arbitrary metadata like 'title' and 'author' that can be used in formats
 		// like ePub, etc. All these values are optional, and they are not included into HTML
 		// directly (instead they are passed to the conversion command as parameters)
 		$metadata = [];
 
-		$html = '';
-		$html .= Html::openElement( 'html' );
-		if ( $bookTitle ) {
-			$html .= Html::openElement( 'head' );
-			$html .= Html::element( 'title', [], $bookTitle );
-			$html .= Html::closeElement( 'head' );
+		$bookTitle = $metabook['title'] ?? false;
+		$bookSubtitle = $metabook['subtitle'] ?? false;
+		$items = $metabook['items'] ?? [];
 
-			$metadata['title'] = $bookTitle;
-		}
+		$html = Html::openElement( 'html' );
+		$header = $this->getStyles();
+		$header .= $bookTitle ? Html::element( 'title', [], $bookTitle ) : '';
+		$html .= Html::rawElement( 'head', [], $header );
 
 		$html .= Html::openElement( 'body' );
+		if ( $bookTitle !== false ) {
+			$metadata['title'] = $bookTitle;
+			$html .= Html::element( 'h1', [], $bookTitle );
+		}
 
 		if ( $bookSubtitle ) {
 			$html .= Html::element( 'h2', [], $bookSubtitle );
