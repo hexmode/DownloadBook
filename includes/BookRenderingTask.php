@@ -22,6 +22,7 @@
 
 namespace MediaWiki\DownloadBook;
 
+use DOMDocument;
 use FileBackend;
 use FormatJson;
 use MediaWiki\Context\IContextSource;
@@ -232,14 +233,69 @@ class BookRenderingTask {
 		$repo->streamFileWithStatus( $file->getPath(), $headers );
 	}
 
+	protected function shiftHeaders( string $content ): string {
+		// Replace <h1> to <h6> with one level lower
+		return preg_replace_callback('{<h([1-6])>(.*?)</h\1>}', function ($matches) {
+			$level = $matches[1];
+			$newLevel = $level + 1;
+			return "<h{$newLevel}>{$matches[2]}</h{$newLevel}>";
+		}, $content);
+	}
+
+	protected function extractToc( string $title, string $html ): string {
+		// Use DOMDocument to parse HTML
+		$dom = new DOMDocument();
+		libxml_use_internal_errors(true); // Suppress warnings for invalid HTML
+		$dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+		libxml_clear_errors();
+
+		$toc = [];
+
+		// Find the TOC div
+		$tocDiv = $dom->getElementById('toc');
+		if ( $tocDiv ) {
+			// Find all li elements within the TOC div
+			$tocItems = $tocDiv->getElementsByTagName('li');
+			foreach ($tocItems as $item) {
+				// Extract the number from the class
+				preg_match('/toclevel-(\d+)/', $item->getAttribute('class'), $matches);
+				$tocLevel = $matches[1] ?? 0;
+
+				// Find the a element
+				$aTag = $item->getElementsByTagName('a')->item(0);
+				if ($aTag) {
+					// Get the href attribute
+					$href = $aTag->getAttribute('href');
+					preg_match('/#(.+)/', $href, $matches);
+					$key = "$title-" . ($matches[1] ?? '');
+
+					// Find the span with class toctext
+					$toctextSpan = $aTag->getElementsByTagName('span');
+					foreach ($toctextSpan as $span) {
+						if ($span->getAttribute('class') === 'toctext') {
+							$tocText = $span->textContent;
+							$toc[$key] = [$tocLevel, $tocText];
+						}
+					}
+				}
+			}
+
+			// Remove the TOC div from the original HTML
+			$tocDiv->parentNode->removeChild($tocDiv);
+			$updatedHTML = $dom->saveHTML();
+		}
+
+		return $updatedHTML ?? $html;
+	}
+
 	protected function renderItem( array &$metadata, array $item, $depth ): string {
 		$type = $item['type'] ?? '';
-		$title = null;
 		$this->logger->debug( "[BookRenderingTask loop item] " . var_export( $item, true ) );
 		if ( $type === 'chapter' ) {
 			$title = $item['title'];
 			$this->logger->debug( "[BookRenderingTask] Rendering Chapter '$title' ..." );
-			return $this->getContent( $metadata, $item['items'] ?? [], $depth + 1 );
+			$content = $this->getContent( $metadata, $item['items'] ?? [], $depth + 1 );
+			return $this->shiftHeaders( $content );
 		}
 
 		$title ??= Title::newFromText( $item['title'] ?? '' );
@@ -299,9 +355,8 @@ class BookRenderingTask {
 			$popts
 		);
 
-		return Html::element( 'h1', [], $title->getFullText() )
-			. $pout->getText( [ 'enableSectionEditLinks' => false ] )
-			. "\n\n";
+		$rendered = $pout->getText( [ 'enableSectionEditLinks' => false ] );
+		return Html::element( 'h1', [], $title->getFullText() ) . $this->extractToc( $title, $rendered ). "\n\n";
 	}
 
 	protected function getContent( array &$metadata, array $items, int $depth = 0 ): string {
@@ -360,11 +415,11 @@ class BookRenderingTask {
 		$html .= Html::openElement( 'body' );
 		if ( $bookTitle !== false ) {
 			$metadata['title'] = $bookTitle;
-			$html .= Html::element( 'h1', [], $bookTitle );
+			$html .= Html::element( 'h1', ["id" => "bookTitle"], $bookTitle );
 		}
 
 		if ( $bookSubtitle ) {
-			$html .= Html::element( 'h2', [], $bookSubtitle );
+			$html .= Html::element( 'h2', ["id" => "bookSubtitle"], $bookSubtitle );
 		}
 
 		$html .= $this->getContent( $metadata, $items );
