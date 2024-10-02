@@ -23,6 +23,8 @@
 namespace MediaWiki\DownloadBook;
 
 use DOMDocument;
+use DOMNode;
+use DOMNodeList;
 use FileBackend;
 use FormatJson;
 use MediaWiki\Context\IContextSource;
@@ -50,6 +52,11 @@ class BookRenderingTask {
 	 * @var int
 	 */
 	protected $id;
+
+	/**
+	 * @var array
+	 */
+	protected $toc_label = [];
 
 	/**
 	 * @var LoggerInterface
@@ -242,14 +249,39 @@ class BookRenderingTask {
 		}, $content);
 	}
 
+	protected function setToc( int $tocLevel, string $key, string $tocText ): void {
+		$this->toc_label[] = [$tocLevel, $key, $tocText];
+	}
+
+	protected function setTocLineText( int $tocLevel, string $key, DOMNodeList $toctextSpan ): void {
+		foreach ($toctextSpan as $span) {
+			if ($span->getAttribute('class') === 'toctext') {
+				$tocText = $span->textContent;
+				$this->setToc( $tocLevel, $key, $tocText );
+			}
+		}
+	}
+
+	protected function handleTocLine( int $tocLevel, string $title, DOMNode $item ) {
+		// Find the a element
+		$aTag = $item->getElementsByTagName('a')->item(0);
+		if ($aTag) {
+			// Get the href attribute
+			$href = $aTag->getAttribute('href');
+			preg_match('/#(.+)/', $href, $matches);
+			$key = "$title-" . ($matches[1] ?? '');
+
+			// Find the span with class toctext
+			$this->setTocLineText( $tocLevel, $key, $aTag->getElementsByTagName('span') );
+		}
+	}
+
 	protected function extractToc( string $title, string $html ): string {
 		// Use DOMDocument to parse HTML
 		$dom = new DOMDocument();
 		libxml_use_internal_errors(true); // Suppress warnings for invalid HTML
 		$dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 		libxml_clear_errors();
-
-		$toc = [];
 
 		// Find the TOC div
 		$tocDiv = $dom->getElementById('toc');
@@ -259,25 +291,8 @@ class BookRenderingTask {
 			foreach ($tocItems as $item) {
 				// Extract the number from the class
 				preg_match('/toclevel-(\d+)/', $item->getAttribute('class'), $matches);
-				$tocLevel = $matches[1] ?? 0;
-
-				// Find the a element
-				$aTag = $item->getElementsByTagName('a')->item(0);
-				if ($aTag) {
-					// Get the href attribute
-					$href = $aTag->getAttribute('href');
-					preg_match('/#(.+)/', $href, $matches);
-					$key = "$title-" . ($matches[1] ?? '');
-
-					// Find the span with class toctext
-					$toctextSpan = $aTag->getElementsByTagName('span');
-					foreach ($toctextSpan as $span) {
-						if ($span->getAttribute('class') === 'toctext') {
-							$tocText = $span->textContent;
-							$toc[$key] = [$tocLevel, $tocText];
-						}
-					}
-				}
+				$tocLevel = intval($matches[1] ?? 0);
+				$this->handleTocLine($tocLevel, $title, $item);
 			}
 
 			// Remove the TOC div from the original HTML
@@ -438,6 +453,10 @@ class BookRenderingTask {
 			$html
 		);
 
+		$this->renderDoc( $html, $newFormat, $metadata );
+	}
+
+	protected function renderDoc( string $html, string $newFormat, array $metadata ) {
 		// Do the actual rendering of $html by calling external utility like "pandoc"
 		$tmpFile = $this->convertHtmlTo( $html, $newFormat, $metadata );
 		if ( !$tmpFile ) {
@@ -470,7 +489,6 @@ class BookRenderingTask {
 		if ( isset( $metadata['title'] ) && $extension ) {
 			$disposition = strtr( $metadata['title'], ' ', '_' ) . '.' . $extension;
 		}
-
 		$this->changeState( self::STATE_FINISHED, $stashKey, $disposition );
 	}
 
