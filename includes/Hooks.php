@@ -22,16 +22,13 @@
 
 namespace MediaWiki\DownloadBook;
 
-use MediaWiki\Installer\Hook\LoadExtensionSchemaUpdatesHook;
-use MediaWiki\User\Hook\UserGetReservedNamesHook;
-
-class Hooks implements UserGetReservedNamesHook, LoadExtensionSchemaUpdatesHook  {
+class Hooks {
 	/**
 	 * Mark username "DownloadBookStash" as reserved.
 	 * @param string[] &$reservedUsernames
 	 * @return bool
 	 */
-	public function onUserGetReservedNames( &$reservedUsernames ) {
+	public static function onUserGetReservedNames( array &$reservedUsernames ) {
 		$reservedUsernames[] = 'DownloadBookStash';
 		return true;
 	}
@@ -41,10 +38,16 @@ class Hooks implements UserGetReservedNamesHook, LoadExtensionSchemaUpdatesHook 
 	 * @return bool
 	 */
 	public function onLoadExtensionSchemaUpdates( $updater ) {
-		$sqlDir = __DIR__ . '/../sql';
+		$dbType = $updater->getDB()->getType();
+		$dir = __DIR__ . "/../db_patches";
+
+		$path = "$dir/" . ( $dbType != "mysql" ? "$dbType/" : "/" );
 
 		/* Main database schema */
-		$updater->addExtensionTable( 'bookrenderingtask', "$sqlDir/patch-bookrenderingtask.sql" );
+		$updater->addExtensionTable(
+			'bookrenderingtask',
+			"$path/tables-generated.sql"
+		);
 
 		return true;
 	}
