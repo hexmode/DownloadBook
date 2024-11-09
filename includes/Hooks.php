@@ -32,4 +32,21 @@ class Hooks {
 		$reservedUsernames[] = 'DownloadBookStash';
 		return true;
 	}
+
+	/**
+	 * @param DatabaseUpdater $updater
+	 * @return bool
+	 */
+	public function onLoadExtensionSchemaUpdates( $updater ) {
+		$dbType = $updater->getDB()->getType();
+		$dir = __DIR__ . "/../db_patches";
+
+		/* Main database schema */
+		$updater->addExtensionTable(
+			'bookrenderingtask',
+			"$dir/$dbType/tables-generated.sql"
+		);
+
+		return true;
+	}
 }
