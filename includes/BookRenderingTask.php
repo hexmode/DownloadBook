@@ -73,8 +73,15 @@ class BookRenderingTask {
 	 */
 	protected function __construct( $id ) {
 		$this->id = $id;
-		$this->logger = LoggerFactory::getInstance( 'DownloadBook' );
+		$this->logger = self::getLogger();
 		$this->context = RequestContext::getMain();
+	}
+
+	/**
+	 * Utility function to get the standard logger even in a static contest.
+	 */
+	protected static function getLogger(): LoggerInterface {
+		return LoggerFactory::getInstance( 'DownloadBook' );
 	}
 
 	/**
@@ -101,6 +108,7 @@ class BookRenderingTask {
 		], __METHOD__ );
 
 		$id = $dbw->insertId();
+		self::getLogger()->debug( "[BookRenderingTask] Starting on request #$id" );
 
 		// Conversion itself can take a long time for large Collections,
 		// so we marked state as PENDING and will later mark it as either FINISHED or FAILED
