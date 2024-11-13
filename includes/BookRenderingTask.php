@@ -42,6 +42,7 @@ use MediaWiki\User\User;
 use TempFSFile;
 use TextContent;
 use UploadStashException;
+use Wikimedia\Services\NoSuchServiceException;
 
 class BookRenderingTask {
 	const STATE_FAILED = 'failed';
@@ -313,7 +314,7 @@ class BookRenderingTask {
 
 	protected function renderItem( array &$metadata, array $item, $depth ): string {
 		$type = $item['type'] ?? '';
-		$this->logger->debug( "[BookRenderingTask loop item] " . var_export( $item, true ) );
+		$this->logger->debug( "[BookRenderingTask] Title: $item[title]" );
 		if ( $type === 'chapter' ) {
 			$title = $item['title'];
 			$this->logger->debug( "[BookRenderingTask] Rendering Chapter '$title' ..." );
@@ -321,6 +322,7 @@ class BookRenderingTask {
 			return $this->shiftHeaders( $content );
 		}
 
+		$titleText = $item['title'];
 		$title ??= Title::newFromText( $item['title'] ?? '' );
 		if ( !$title ) {
 			$this->logger->debug( "[BookRenderingTask] invalid title ..." );
@@ -379,7 +381,14 @@ class BookRenderingTask {
 		);
 
 		$rendered = $pout->getText( [ 'enableSectionEditLinks' => false ] );
-		return Html::element( 'h1', [], $title->getFullText() ) . $this->extractToc( $title, $rendered ). "\n\n";
+		/* Get title if Displaytitle is used. */
+		try {
+			$service = MediaWikiServices::getInstance()->getService( "DisplayTitleService" );
+			$service->getDisplayTitle( $title, $titleText );
+		} catch( NoSuchServiceException ) {
+			$this->logger->debug( "No displaytitle service, using raw title." );
+		}
+		return Html::element( 'h1', [], $titleText ) . $this->extractToc( $title, $rendered ). "\n\n";
 	}
 
 	protected function getContent( array &$metadata, array $items, int $depth = 0 ): string {
@@ -539,7 +548,9 @@ class BookRenderingTask {
 			return Shell::escape( $metadata[$key] ?? '' );
 		}, $command );
 
-		$this->logger->debug( "[BookRenderingTask] Attempting to convert HTML=(" . strlen( $html ) . " bytes omitted) into [$newFormat]..." );
+		$this->logger->debug(
+			"[BookRenderingTask] Attempting to convert HTML=(" . strlen( $html ) . " bytes omitted) into [$newFormat]..."
+		);
 
 		// Workaround for "pandoc" trying to use current directory
 		// (to which it doesn't have write access) for its own temporary files.
