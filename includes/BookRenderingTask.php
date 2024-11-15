@@ -42,7 +42,6 @@ use MediaWiki\User\User;
 use TempFSFile;
 use TextContent;
 use UploadStashException;
-use Wikimedia\Services\NoSuchServiceException;
 
 class BookRenderingTask {
 	const STATE_FAILED = 'failed';
@@ -322,7 +321,7 @@ class BookRenderingTask {
 			return $this->shiftHeaders( $content );
 		}
 
-		$titleText = $item['title'];
+		$titleText = $item['displaytitle'] ?? $item['title'] ?? '';
 		$title ??= Title::newFromText( $item['title'] ?? '' );
 		if ( !$title ) {
 			$this->logger->debug( "[BookRenderingTask] invalid title ..." );
@@ -381,13 +380,7 @@ class BookRenderingTask {
 		);
 
 		$rendered = $pout->getText( [ 'enableSectionEditLinks' => false ] );
-		/* Get title if Displaytitle is used. */
-		try {
-			$service = MediaWikiServices::getInstance()->getService( "DisplayTitleService" );
-			$service->getDisplayTitle( $title, $titleText );
-		} catch( NoSuchServiceException ) {
-			$this->logger->debug( "No displaytitle service, using raw title." );
-		}
+		$this->logger->debug("Got title text: $titleText");
 		return Html::element( 'h1', [], $titleText ) . $this->extractToc( $title, $rendered ). "\n\n";
 	}
 
