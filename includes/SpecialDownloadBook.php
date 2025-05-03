@@ -22,10 +22,9 @@
 
 namespace MediaWiki\DownloadBook;
 
-use FormatJson;
+use MediaWiki\Json\FormatJson;
 use MediaWiki\Logger\LoggerFactory;
-use MWException;
-use UnlistedSpecialPage;
+use MediaWiki\SpecialPage\UnlistedSpecialPage;
 
 class SpecialDownloadBook extends UnlistedSpecialPage {
 	public function __construct() {
@@ -62,7 +61,7 @@ class SpecialDownloadBook extends UnlistedSpecialPage {
 			$status = FormatJson::parse( $json, FormatJson::FORCE_ASSOC );
 			if ( !$status->isOK() ) {
 				$logger->error( '[Special:DownloadBook] command=render: Malformed metabook parameter.' );
-				throw new MWException( 'Malformed metabook parameter.' );
+				throw new Exception( 'Malformed metabook parameter.' );
 			}
 			$metabook = $status->value;
 
@@ -71,7 +70,7 @@ class SpecialDownloadBook extends UnlistedSpecialPage {
 			$ret = [ 'collection_id' => $collectionId ];
 		} else {
 			$logger->error( "[Special:DownloadBook] Unknown command: [$command]" );
-			throw new MWException( 'Unknown command.' );
+			throw new Exception( 'Unknown command.' );
 		}
 
 		$logger->debug( "[Special:DownloadBook] Sending API response to command=$command: " .

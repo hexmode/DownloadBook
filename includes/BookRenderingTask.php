@@ -22,21 +22,21 @@
 
 namespace MediaWiki\DownloadBook;
 
-use DeferredUpdates;
-use FileBackend;
-use FormatJson;
-use Html;
+use MediaWiki\Deferred\DeferredUpdates;
+use Wikimedia\FileBackend\FileBackend;
+use MediaWiki\Json\FormatJson;
+use MediaWiki\Html\Html;
 use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Shell\Shell;
-use MWException;
-use RequestContext;
-use SpecialPage;
-use TempFSFile;
-use TextContent;
-use Title;
+use MediaWiki\Context\RequestContext;
+use MediaWiki\SpecialPage\SpecialPage;
+use Wikimedia\FileBackend\FSFile\TempFSFile;
+use MediaWiki\Content\TextContent;
+use MediaWiki\Title\Title;
 use UploadStashException;
-use User;
+use MediaWiki\User\User;
+use UploadStash;
 
 class BookRenderingTask {
 	public const STATE_FAILED = 'failed';
@@ -118,7 +118,7 @@ class BookRenderingTask {
 
 	/**
 	 * Get UploadStash where the results of rendering (e.g. .PDF files) are stored.
-	 * @return \UploadStash
+	 * @return UploadStash
 	 */
 	protected function getUploadStash() {
 		$user = User::newSystemUser( 'DownloadBookStash', [ 'steal' => true ] );

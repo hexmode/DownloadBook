@@ -12,7 +12,7 @@
 		"DownloadBook": "MediaWiki\\DownloadBook\\SpecialDownloadBook"
 	},
 	"ExtensionMessagesFiles": {
-		"DownloadBookAlias": "DownloadBook.alias.php"
+		"DownloadBookAlias": "includes/alias.php"
 	},
 	"AutoloadClasses": {
 		"MediaWiki\\DownloadBook\\BookRenderingTask": "includes/BookRenderingTask.php",

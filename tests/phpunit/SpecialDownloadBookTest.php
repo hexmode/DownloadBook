@@ -22,26 +22,26 @@
 
 namespace MediaWiki\DownloadBook;
 
-use DeferredUpdates;
-use FauxRequest;
-use FormatJson;
-use LocalRepo;
+use MediaWiki\Deferred\DeferredUpdates;
+use MediaWiki\Request\FauxRequest;
+use MediaWiki\Json\FormatJson;
+use MediaWiki\FileRepo\LocalRepo;
 use MediaWiki\Shell\Command;
 use MediaWiki\Shell\CommandFactory;
-use MWException;
-use RepoGroup;
+use MediaWiki\FileRepo\RepoGroup;
 use Shellbox\Command\UnboxedExecutor;
 use Shellbox\Command\UnboxedResult;
 use Shellbox\ShellParser\ShellParser;
-use SpecialPage;
+use MediaWiki\SpecialPage\SpecialPage;
 use SpecialPageTestBase;
-use User;
+use MediaWiki\User\User;
 
 /**
  * @covers MediaWiki\DownloadBook\SpecialDownloadBook
  * @group Database
  */
 class SpecialDownloadBookTest extends SpecialPageTestBase {
+	private array $tablesUsed;
 	protected function newSpecialPage() {
 		return new SpecialDownloadBook();
 	}
@@ -55,7 +55,7 @@ class SpecialDownloadBookTest extends SpecialPageTestBase {
 	 * Checks the result when called without ?command=.
 	 */
 	public function testErrorNoCommand() {
-		$this->expectExceptionObject( new MWException( 'Unknown command.' ) );
+		$this->expectExceptionObject( new Exception( 'Unknown command.' ) );
 		$this->runSpecial( [] );
 	}
 
@@ -63,7 +63,7 @@ class SpecialDownloadBookTest extends SpecialPageTestBase {
 	 * Checks the result when called with unsupported ?command=.
 	 */
 	public function testErrorUnknownCommand() {
-		$this->expectExceptionObject( new MWException( 'Unknown command.' ) );
+		$this->expectExceptionObject( new Exception( 'Unknown command.' ) );
 		$this->runSpecial( [ 'command' => 'makesalad' ] );
 	}
 
@@ -71,7 +71,7 @@ class SpecialDownloadBookTest extends SpecialPageTestBase {
 	 * Checks the result when command=render is called with invalid JSON as metabook.
 	 */
 	public function testErrorRenderInvalidJson() {
-		$this->expectExceptionObject( new MWException( 'Malformed metabook parameter.' ) );
+		$this->expectExceptionObject( new Exception( 'Malformed metabook parameter.' ) );
 		$this->runSpecial( [
 			'command' => 'render',
 			'metabook' => 'Invalid; JSON;'
